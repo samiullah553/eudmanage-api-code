@@ -77,11 +77,13 @@ const generateInvoiceForSchedule = async (schedule, userId) => {
   return generated;
 };
 
+const { error: respError, success: respSuccess } = require('../utils/response');
+
 // Create a fee schedule for a student or class
 exports.createSchedule = async (req, res) => {
   try {
     const { studentId, classId, items, dueDate, frequency, category, isRecurring, recurrenceEndDate } = req.body;
-    if (!studentId && !classId) return res.status(400).json({ error: 'studentId or classId is required' });
+    if (!studentId && !classId) return respError(res, 'studentId or classId is required', 400);
 
     const scheduleItems = items && items.length ? items : [{ name: category || 'Fee', amount: 0 }];
     const total = scheduleItems.reduce((s, it) => s + (it.amount || 0), 0);
@@ -100,23 +102,23 @@ exports.createSchedule = async (req, res) => {
       createdBy: req.user && req.user._id,
     };
     const schedule = await FeeSchedule.create(schedulePayload);
-    return res.status(201).json(schedule);
+    return respSuccess(res, schedule, 201);
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: 'Could not create schedule' });
+    return respError(res, err.message || 'Could not create schedule', 500);
   }
 };
 
 exports.generateInvoicesFromSchedule = async (req, res) => {
   try {
     const schedule = await FeeSchedule.findOne({ _id: req.params.id, schoolId: req.user.schoolId });
-    if (!schedule) return res.status(404).json({ error: 'Schedule not found' });
+    if (!schedule) return respError(res, 'Schedule not found', 404);
 
     const generated = await generateInvoiceForSchedule(schedule, req.user && req.user._id);
-    return res.json({ generated, schedule });
+    return respSuccess(res, { generated, schedule });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: 'Could not generate invoices from schedule' });
+    return respError(res, err.message || 'Could not generate invoices from schedule', 500);
   }
 };
 
@@ -134,10 +136,10 @@ exports.generateInvoicesFromSchedules = async (req, res) => {
         }
       }
     }
-    return res.json({ generatedSchedules: result });
+    return respSuccess(res, { generatedSchedules: result });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: 'Could not generate due invoices from schedules' });
+    return respError(res, err.message || 'Could not generate due invoices from schedules', 500);
   }
 };
 
@@ -145,10 +147,10 @@ exports.generateInvoicesFromSchedules = async (req, res) => {
 exports.listSchedules = async (req, res) => {
   try {
     const schedules = await FeeSchedule.find(schoolFilter(req)).populate('studentId classId createdBy').sort({ createdAt: -1 });
-    return res.json(schedules);
+    return respSuccess(res, schedules);
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: 'Could not list schedules' });
+    return respError(res, 'Could not list schedules', 500);
   }
 };
 
@@ -156,11 +158,11 @@ exports.listSchedules = async (req, res) => {
 exports.getSchedule = async (req, res) => {
   try {
     const schedule = await FeeSchedule.findOne({ _id: req.params.id, schoolId: req.user.schoolId }).populate('studentId classId createdBy');
-    if (!schedule) return res.status(404).json({ error: 'Schedule not found' });
-    return res.json(schedule);
+    if (!schedule) return respError(res, 'Schedule not found', 404);
+    return respSuccess(res, schedule);
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: 'Could not fetch schedule' });
+    return respError(res, 'Could not fetch schedule', 500);
   }
 };
 
@@ -169,12 +171,12 @@ exports.createInvoiceFromSchedule = async (req, res) => {
   try {
     const { scheduleId } = req.params;
     const schedule = await FeeSchedule.findOne({ _id: scheduleId, schoolId: req.user.schoolId });
-    if (!schedule) return res.status(404).json({ error: 'Schedule not found' });
+    if (!schedule) return respError(res, 'Schedule not found', 404);
     const invoice = await Invoice.create({ schoolId: schedule.schoolId, scheduleId: schedule._id, studentId: schedule.studentId, items: schedule.items, amountDue: schedule.totalAmount, dueDate: schedule.dueDate, createdBy: req.user && req.user._id });
-    return res.status(201).json(invoice);
+    return respSuccess(res, invoice, 201);
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: 'Could not create invoice' });
+    return respError(res, 'Could not create invoice', 500);
   }
 };
 
@@ -182,9 +184,9 @@ exports.createInvoiceFromSchedule = async (req, res) => {
 exports.createInvoice = async (req, res) => {
   try {
     const { studentId, items, amountDue, dueDate } = req.body;
-    if (!studentId) return res.status(400).json({ error: 'studentId is required' });
+    if (!studentId) return respError(res, 'studentId is required', 400);
     const student = await Student.findOne({ _id: studentId, schoolId: req.user.schoolId });
-    if (!student) return res.status(404).json({ error: 'Student not found' });
+    if (!student) return respError(res, 'Student not found', 404);
 
     let invoiceItems = items;
     let total = amountDue;
@@ -207,10 +209,10 @@ exports.createInvoice = async (req, res) => {
       dueDate,
       createdBy: req.user && req.user._id,
     });
-    return res.status(201).json(invoice);
+    return respSuccess(res, invoice, 201);
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: 'Could not create invoice' });
+    return respError(res, 'Could not create invoice', 500);
   }
 };
 
@@ -218,11 +220,11 @@ exports.createInvoice = async (req, res) => {
 exports.getInvoice = async (req, res) => {
   try {
     const invoice = await Invoice.findOne({ _id: req.params.id, schoolId: req.user.schoolId }).populate('studentId scheduleId');
-    if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
-    return res.json(invoice);
+    if (!invoice) return respError(res, 'Invoice not found', 404);
+    return respSuccess(res, invoice);
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: 'Could not fetch invoice' });
+    return respError(res, 'Could not fetch invoice', 500);
   }
 };
 
@@ -234,10 +236,10 @@ exports.listInvoices = async (req, res) => {
     if (studentId) q.studentId = studentId;
     if (status) q.status = status;
     const invoices = await Invoice.find(q).limit(200).sort({ createdAt: -1 });
-    return res.json(invoices);
+    return respSuccess(res, invoices);
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: 'Could not list invoices' });
+    return respError(res, 'Could not list invoices', 500);
   }
 };
 
@@ -246,7 +248,7 @@ exports.updateInvoiceStatus = async (req, res) => {
   try {
     const { status, amountPaid } = req.body;
     const invoice = await Invoice.findOne({ _id: req.params.id, schoolId: req.user.schoolId });
-    if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+    if (!invoice) return respError(res, 'Invoice not found', 404);
 
     if (typeof amountPaid !== 'undefined' && amountPaid !== null) {
       invoice.amountPaid = amountPaid;
@@ -259,7 +261,7 @@ exports.updateInvoiceStatus = async (req, res) => {
     if (status) {
       // accept explicit status values
       const allowed = ['Pending', 'Partial', 'Paid', 'Overdue', 'Cancelled'];
-      if (!allowed.includes(status)) return res.status(400).json({ error: 'Invalid status' });
+      if (!allowed.includes(status)) return respError(res, 'Invalid status', 400);
       invoice.status = status;
       if (status === 'Paid' && (invoice.amountPaid || 0) < (invoice.amountDue || 0)) {
         invoice.amountPaid = invoice.amountDue || invoice.amountPaid;
@@ -268,10 +270,10 @@ exports.updateInvoiceStatus = async (req, res) => {
     }
 
     await invoice.save();
-    return res.json(invoice);
+    return respSuccess(res, invoice);
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: 'Could not update invoice status' });
+    return respError(res, 'Could not update invoice status', 500);
   }
 };
 
@@ -281,10 +283,10 @@ exports.listPayments = async (req, res) => {
     const q = schoolFilter(req, {});
     if (studentId) q.studentId = studentId;
     const payments = await Payment.find(q).sort({ createdAt: -1 });
-    return res.json(payments);
+    return respSuccess(res, payments);
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: 'Could not list payments' });
+    return respError(res, 'Could not list payments', 500);
   }
 };
 
@@ -292,12 +294,12 @@ exports.listPayments = async (req, res) => {
 exports.createExpense = async (req, res) => {
   try {
     const { title, description, category, amount, date, paidTo } = req.body;
-    if (!title || amount == null) return res.status(400).json({ error: 'Title and amount are required' });
+    if (!title || amount == null) return respError(res, 'Title and amount are required', 400);
     const expense = await Expense.create({ schoolId: req.user.schoolId, title, description, category, amount, date, paidTo, createdBy: req.user && req.user._id });
-    return res.status(201).json(expense);
+    return respSuccess(res, expense, 201);
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: 'Could not create expense' });
+    return respError(res, 'Could not create expense', 500);
   }
 };
 
@@ -305,10 +307,10 @@ exports.createExpense = async (req, res) => {
 exports.listExpenses = async (req, res) => {
   try {
     const expenses = await Expense.find(schoolFilter(req)).sort({ date: -1, createdAt: -1 });
-    return res.json(expenses);
+    return respSuccess(res, expenses);
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: 'Could not list expenses' });
+    return respError(res, 'Could not list expenses', 500);
   }
 };
 
@@ -316,11 +318,11 @@ exports.listExpenses = async (req, res) => {
 exports.getExpense = async (req, res) => {
   try {
     const expense = await Expense.findOne({ _id: req.params.id, schoolId: req.user.schoolId });
-    if (!expense) return res.status(404).json({ error: 'Expense not found' });
-    return res.json(expense);
+    if (!expense) return respError(res, 'Expense not found', 404);
+    return respSuccess(res, expense);
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: 'Could not fetch expense' });
+    return respError(res, 'Could not fetch expense', 500);
   }
 };
 
@@ -328,14 +330,14 @@ exports.getExpense = async (req, res) => {
 exports.createPayroll = async (req, res) => {
   try {
     const { teacherId, periodStart, periodEnd, amount, method, reference, notes, status, payDate } = req.body;
-    if (!teacherId || !periodStart || !periodEnd || amount == null) return res.status(400).json({ error: 'Teacher, period, and amount are required' });
+    if (!teacherId || !periodStart || !periodEnd || amount == null) return respError(res, 'Teacher, period, and amount are required', 400);
     const teacher = await Teacher.findOne({ _id: teacherId, schoolId: req.user.schoolId });
-    if (!teacher) return res.status(404).json({ error: 'Teacher not found' });
+    if (!teacher) return respError(res, 'Teacher not found', 404);
     const payroll = await Payroll.create({ schoolId: req.user.schoolId, teacherId, periodStart, periodEnd, amount, method, reference, notes, status: status || 'Pending', payDate: status === 'Paid' ? payDate || new Date() : null, createdBy: req.user && req.user._id });
-    return res.status(201).json(payroll);
+    return respSuccess(res, payroll, 201);
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: 'Could not create payroll entry' });
+    return respError(res, 'Could not create payroll entry', 500);
   }
 };
 
@@ -345,10 +347,10 @@ exports.listPayrolls = async (req, res) => {
     const q = schoolFilter(req, {});
     if (req.query.teacherId) q.teacherId = req.query.teacherId;
     const payrolls = await Payroll.find(q).populate('teacherId createdBy').sort({ periodEnd: -1, createdAt: -1 });
-    return res.json(payrolls);
+    return respSuccess(res, payrolls);
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: 'Could not list payroll entries' });
+    return respError(res, 'Could not list payroll entries', 500);
   }
 };
 
@@ -356,11 +358,11 @@ exports.listPayrolls = async (req, res) => {
 exports.getPayroll = async (req, res) => {
   try {
     const payroll = await Payroll.findOne({ _id: req.params.id, schoolId: req.user.schoolId }).populate('teacherId createdBy');
-    if (!payroll) return res.status(404).json({ error: 'Payroll entry not found' });
-    return res.json(payroll);
+    if (!payroll) return respError(res, 'Payroll entry not found', 404);
+    return respSuccess(res, payroll);
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: 'Could not fetch payroll entry' });
+    return respError(res, 'Could not fetch payroll entry', 500);
   }
 };
 
@@ -368,17 +370,17 @@ exports.getPayroll = async (req, res) => {
 exports.payPayroll = async (req, res) => {
   try {
     const payroll = await Payroll.findOne({ _id: req.params.id, schoolId: req.user.schoolId });
-    if (!payroll) return res.status(404).json({ error: 'Payroll entry not found' });
+    if (!payroll) return respError(res, 'Payroll entry not found', 404);
     const { method, reference, payDate } = req.body;
     payroll.status = 'Paid';
     payroll.method = method || payroll.method;
     payroll.reference = reference || payroll.reference;
     payroll.payDate = payDate ? new Date(payDate) : new Date();
     await payroll.save();
-    return res.json(payroll);
+    return respSuccess(res, payroll);
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: 'Could not mark payroll as paid' });
+    return respError(res, 'Could not mark payroll as paid', 500);
   }
 };
 
@@ -387,7 +389,7 @@ exports.recordPayment = async (req, res) => {
   try {
     const { invoiceId, amount, method, gatewayRef, status } = req.body;
     const invoice = await Invoice.findOne({ _id: invoiceId, schoolId: req.user.schoolId });
-    if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+    if (!invoice) return respError(res, 'Invoice not found', 404);
     const payment = await Payment.create({ schoolId: req.user.schoolId, invoiceId, studentId: invoice.studentId, amount, method, gatewayRef, status: status || 'Completed', recordedBy: req.user && req.user._id });
     invoice.amountPaid = (invoice.amountPaid || 0) + amount;
     if (invoice.amountPaid >= invoice.amountDue) invoice.status = 'Paid';
@@ -402,17 +404,17 @@ exports.recordPayment = async (req, res) => {
       }
     }
 
-    return res.status(201).json({ payment, invoice });
+    return respSuccess(res, { payment, invoice }, 201);
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: 'Could not record payment' });
+    return respError(res, 'Could not record payment', 500);
   }
 };
 
 // Payment gateway webhook placeholder
 exports.gatewayWebhook = async (req, res) => {
   console.log('Received payment webhook', req.body);
-  res.status(200).send('ok');
+  return respSuccess(res, { message: 'ok' });
 };
 
 // Get today's collection
@@ -426,10 +428,10 @@ exports.getTodaysCollection = async (req, res) => {
       createdAt: { $gte: startOfDay, $lte: endOfDay }
     });
     const total = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
-    res.json({ total, count: payments.length });
+    return respSuccess(res, { total, count: payments.length });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Could not fetch today\'s collection' });
+    return respError(res, 'Could not fetch today\'s collection', 500);
   }
 };
 
@@ -444,10 +446,10 @@ exports.getMonthlyCollection = async (req, res) => {
       createdAt: { $gte: startOfMonth, $lte: endOfMonth }
     });
     const total = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
-    res.json({ total, count: payments.length });
+    return respSuccess(res, { total, count: payments.length });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Could not fetch monthly collection' });
+    return respError(res, 'Could not fetch monthly collection', 500);
   }
 };
 
@@ -459,10 +461,10 @@ exports.getPendingPayrollTotal = async (req, res) => {
       status: 'Pending'
     });
     const total = payrolls.reduce((sum, p) => sum + (p.amount || 0), 0);
-    res.json({ total, count: payrolls.length });
+    return respSuccess(res, { total, count: payrolls.length });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Could not fetch pending payroll' });
+    return respError(res, 'Could not fetch pending payroll', 500);
   }
 };
 
@@ -482,10 +484,10 @@ exports.getProfit = async (req, res) => {
       const colTotal = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
       profit = colTotal - expTotal - payTotal;
     }
-    res.json({ profit });
+    return respSuccess(res, { profit });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Could not calculate profit' });
+    return respError(res, 'Could not calculate profit', 500);
   }
 };
 
@@ -493,7 +495,7 @@ exports.getProfit = async (req, res) => {
 exports.createRefund = async (req, res) => {
   try {
     const { studentId, paymentId, amount, reason, method } = req.body;
-    if (!amount || amount <= 0) return res.status(400).json({ error: 'Amount is required' });
+    if (!amount || amount <= 0) return respError(res, 'Amount is required', 400);
     const Refund = require('../models/Refund');
     const refund = await Refund.create({
       schoolId: req.user.schoolId,
@@ -504,10 +506,10 @@ exports.createRefund = async (req, res) => {
       method: method || 'BankTransfer',
       createdBy: req.user && req.user._id
     });
-    return res.status(201).json(refund);
+    return respSuccess(res, refund, 201);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Could not create refund' });
+    return respError(res, 'Could not create refund', 500);
   }
 };
 
@@ -516,10 +518,10 @@ exports.listRefunds = async (req, res) => {
   try {
     const Refund = require('../models/Refund');
     const refunds = await Refund.find(schoolFilter(req)).populate('studentId paymentId').sort({ createdAt: -1 });
-    res.json(refunds);
+    return respSuccess(res, refunds);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Could not list refunds' });
+    return respError(res, 'Could not list refunds', 500);
   }
 };
 
@@ -527,7 +529,7 @@ exports.listRefunds = async (req, res) => {
 exports.createScholarship = async (req, res) => {
   try {
     const { studentId, amount, type, description, startDate, endDate } = req.body;
-    if (!amount || amount <= 0) return res.status(400).json({ error: 'Amount is required' });
+    if (!amount || amount <= 0) return respError(res, 'Amount is required', 400);
     const Scholarship = require('../models/Scholarship');
     const scholarship = await Scholarship.create({
       schoolId: req.user.schoolId,
@@ -539,10 +541,10 @@ exports.createScholarship = async (req, res) => {
       endDate,
       createdBy: req.user && req.user._id
     });
-    return res.status(201).json(scholarship);
+    return respSuccess(res, scholarship, 201);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Could not create scholarship' });
+    return respError(res, 'Could not create scholarship', 500);
   }
 };
 
@@ -553,9 +555,9 @@ exports.listScholarships = async (req, res) => {
     const q = schoolFilter(req, {});
     if(req.query.studentId) q.studentId = req.query.studentId;
     const scholarships = await Scholarship.find(q).populate('studentId').sort({ createdAt: -1 });
-    res.json(scholarships);
+    return respSuccess(res, scholarships);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Could not list scholarships' });
+    return respError(res, 'Could not list scholarships', 500);
   }
 };

@@ -1,5 +1,6 @@
 const Parent = require('../models/Parent');
 const Student = require('../models/Student');
+const { error: respError, success: respSuccess } = require('../utils/response');
 
 const schoolFilter = (req, filter = {}) => ({ ...filter, schoolId: req.user.schoolId });
 
@@ -21,9 +22,9 @@ const getParents = async (req, res) => {
       Parent.countDocuments(filter)
     ]);
 
-    res.json({ data: parents, total, page, limit, totalPages: Math.ceil(total / limit) || 1 });
+    return respSuccess(res, { data: parents, total, page, limit, totalPages: Math.ceil(total / limit) || 1 });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return respError(res, err.message || 'Could not fetch parents', 500);
   }
 };
 
@@ -37,92 +38,108 @@ const createParent = async (req, res) => {
 
     const parent = new Parent(payload);
     await parent.save();
-    res.status(201).json(parent);
+    return respSuccess(res, parent, 201);
   } catch (err) {
-    if (err && err.name === 'ValidationError') return res.status(400).json({ error: err.message, details: err.errors });
-    res.status(400).json({ error: err.message });
+    if (err && err.name === 'ValidationError') return respError(res, err.message, 400, err.errors);
+    return respError(res, err.message || 'Could not create parent', 400);
   }
 };
 
 const updateParent = async (req, res) => {
   try {
-    const parent = await Parent.findOneAndUpdate({ _id: req.params.id, schoolId: req.user.schoolId }, { ...req.body, updatedAt: Date.now() }, { new: true });
-    if (!parent) return res.status(404).json({ error: 'Parent not found' });
-    res.json(parent);
+    const parent = await Parent.findOneAndUpdate(
+      { _id: req.params.id, schoolId: req.user.schoolId },
+      { ...req.body, updatedAt: Date.now() },
+      { new: true, runValidators: true, context: 'query' }
+    );
+    if (!parent) return respError(res, 'Parent not found', 404);
+    return respSuccess(res, parent);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    if (err && err.name === 'ValidationError') return respError(res, err.message, 400, err.errors);
+    return respError(res, err.message || 'Could not update parent', 400);
   }
 };
 
 const getParentById = async (req, res) => {
   try {
     const parent = await Parent.findOne({ _id: req.params.id, schoolId: req.user.schoolId });
-    if (!parent) return res.status(404).json({ error: 'Parent not found' });
+    if (!parent) return respError(res, 'Parent not found', 404);
     const students = await Student.find({ schoolId: req.user.schoolId, parentIds: parent._id }).select('_id fname lname roll classId status');
-    res.json({ ...parent.toObject(), students });
+    return respSuccess(res, { ...parent.toObject(), students });
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    return respError(res, err.message || 'Could not fetch parent', 400);
   }
 };
 
 const linkParentToStudent = async (req, res) => {
   try {
-    const { parentId, relationship, isPrimary } = req.body;
-    const student = await Student.findOne({ _id: req.params.id, schoolId: req.user.schoolId });
-    if (!student) return res.status(404).json({ error: 'Student not found' });
+    const parentId = req.params.id;
+    const { studentId, relationship, isPrimary } = req.body;
 
     const parent = await Parent.findOne({ _id: parentId, schoolId: req.user.schoolId });
-    if (!parent) return res.status(404).json({ error: 'Parent not found' });
+    if (!parent) return respError(res, 'Parent not found', 404);
+
+    const student = await Student.findOne({ _id: studentId, schoolId: req.user.schoolId });
+    if (!student) return respError(res, 'Student not found', 404);
 
     const existing = student.parentIds || [];
+    let hasChanges = false;
+
     if (!existing.some((id) => String(id) === String(parent._id))) {
       existing.push(parent._id);
       student.parentIds = existing;
-      if (relationship) {
-        student.parent = relationship;
-      }
-      if (isPrimary) {
-        student.parent = parent.fname + ' ' + parent.lname;
-      }
+      hasChanges = true;
+    }
+
+    if (relationship) {
+      student.parent = relationship;
+      hasChanges = true;
+    }
+    if (isPrimary) {
+      student.parent = `${parent.fname} ${parent.lname}`;
+      hasChanges = true;
+    }
+
+    if (hasChanges) {
       student.updatedAt = Date.now();
       await student.save();
     }
 
-    res.json({ message: 'Parent linked', student });
+    return respSuccess(res, { message: 'Parent linked', student });
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    return respError(res, err.message || 'Could not link parent', 400);
   }
 };
 
 const deleteParent = async (req, res) => {
   try {
     const parent = await Parent.findOneAndDelete({ _id: req.params.id, schoolId: req.user.schoolId });
-    if (!parent) return res.status(404).json({ error: 'Parent not found' });
+    if (!parent) return respError(res, 'Parent not found', 404);
     await Student.updateMany({ schoolId: req.user.schoolId, parentIds: parent._id }, { $pull: { parentIds: parent._id } });
-    res.json({ message: 'Parent deleted' });
+    return respSuccess(res, { message: 'Parent deleted' });
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    return respError(res, err.message || 'Could not delete parent', 400);
   }
 };
 
 const getMyChildren = async (req, res) => {
   try {
     if (req.user.role !== 'parent') {
-      return res.status(403).json({ error: 'Parent access required' });
+      return respError(res, 'Parent access required', 403);
     }
 
     const parent = await Parent.findOne({ userId: req.user.id, schoolId: req.user.schoolId });
     if (!parent) {
-      return res.status(404).json({ error: 'Parent profile not found for this account' });
+      return respError(res, 'Parent profile not found for this account', 404);
     }
 
     const students = await Student.find({ schoolId: req.user.schoolId, parentIds: parent._id })
       .select('_id fname lname roll classId status email contact')
       .populate('classId', 'name section');
 
-    res.json({ parent, children: students });
+    return respSuccess(res, { parent, children: students });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return respError(res, err.message || 'Could not fetch children', 500);
   }
 };
 

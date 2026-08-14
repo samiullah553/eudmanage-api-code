@@ -1,13 +1,9 @@
-function errorHandler(err, req, res, next) {
-  const status = err.status || (err.name === 'ValidationError' ? 400 : 500);
-  const isProd = process.env.NODE_ENV === 'production';
+const { error: respError } = require('../utils/response');
 
-  const payload = {
-    error: isProd && status === 500 ? 'Internal Server Error' : err.message || 'Unexpected error'
-  };
-
-  if (!isProd) payload.stack = err.stack;
-  res.status(status).json(payload);
-}
-
-module.exports = errorHandler;
+module.exports = function errorHandler(err, req, res, next) {
+  console.error(err && err.stack ? err.stack : err);
+  const status = err && err.status ? err.status : (err && err.name === 'ValidationError' ? 400 : 500);
+  const message = err && err.message ? err.message : 'Internal Server Error';
+  const details = process.env.NODE_ENV !== 'production' ? { stack: err && err.stack } : undefined;
+  return respError(res, message, status, details);
+};

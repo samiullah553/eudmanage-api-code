@@ -35,9 +35,9 @@ router.put('/:id', validate([
 
 router.post('/:id/link-student', validate([
   param('id').isMongoId().withMessage('Invalid parent ID'),
-  body('parentId').optional().isMongoId().withMessage('Invalid parent ID'),
+  body('studentId').notEmpty().isMongoId().withMessage('Invalid student ID'),
   body('relationship').optional().trim().escape(),
-  body('isPrimary').optional().isBoolean()
+  body('isPrimary').optional().isBoolean().withMessage('isPrimary must be a boolean')
 ]), linkParentToStudent);
 
 router.delete('/:id', validate([

@@ -1,6 +1,7 @@
 const Student = require('../models/Student');
 const Invoice = require('../models/Invoice');
 const Payment = require('../models/Payment');
+const { error: respError, success: respSuccess } = require('../utils/response');
 
 const schoolFilter = (req, filter = {}) => ({ ...filter, schoolId: req.user.schoolId });
 
@@ -50,9 +51,9 @@ const getStudents = async (req, res) => {
     ]);
 
     const totalPages = Math.ceil(total / limit) || 1;
-    res.json({ data: students, total, page, limit, totalPages });
+    return respSuccess(res, { data: students, total, page, limit, totalPages });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return respError(res, err.message || 'Could not fetch students', 500);
   }
 };
 
@@ -71,17 +72,18 @@ const createStudent = async (req, res) => {
     }
 
     if (!fname || !lname || !roll) {
-      return res.status(400).json({ error: 'Missing required fields: fname, lname, roll', received: { keys: Object.keys(req.body || {}), fname, lname, roll } });
+      return respError(res, 'Missing required fields: fname, lname, roll', 400, { received: { keys: Object.keys(req.body || {}), fname, lname, roll } });
     }
 
-    if (classId) {
-      const exists = await Student.exists({ schoolId: req.user.schoolId, classId, roll });
-      if (exists) {
-        return res.status(400).json({ error: 'Roll number already exists for this class' });
-      }
+    // Normalize classId for uniqueness checks: treat missing as null
+    const classFilter = classId ? classId : null;
+    const exists = await Student.exists({ schoolId: req.user.schoolId, classId: classFilter, roll });
+    if (exists) {
+      return respError(res, 'Roll number already exists for this class', 400);
     }
 
     const payload = { ...req.body, schoolId };
+    if (!('classId' in payload)) payload.classId = null;
     if (!payload.studentId) {
       const year = new Date().getFullYear();
       const count = await Student.countDocuments({ schoolId });
@@ -92,14 +94,14 @@ const createStudent = async (req, res) => {
     }
     const student = new Student(payload);
     await student.save();
-    res.status(201).json(student);
+    return respSuccess(res, student, 201);
   } catch (err) {
     console.error('createStudent error', err);
-    if (err && err.name === 'ValidationError') return res.status(400).json({ error: err.message, details: err.errors });
+    if (err && err.name === 'ValidationError') return respError(res, err.message, 400, err.errors);
     if (err && err.code === 11000) {
-      return res.status(400).json({ error: 'Duplicate roll number exists for this class' });
+      return respError(res, 'Duplicate roll number exists for this class', 400);
     }
-    res.status(400).json({ error: err.message });
+    return respError(res, err.message || 'Could not create student', 400);
   }
 };
 
@@ -109,19 +111,18 @@ const updateStudent = async (req, res) => {
     const { roll, classId } = req.body;
     if (roll !== undefined || classId !== undefined) {
       const studentToUpdate = await Student.findOne({ _id: req.params.id, schoolId: req.user.schoolId });
-      if (!studentToUpdate) return res.status(404).json({ error: 'Student not found' });
+      if (!studentToUpdate) return respError(res, 'Student not found', 404);
       const targetClassId = classId !== undefined ? classId : studentToUpdate.classId;
       const targetRoll = roll !== undefined ? roll : studentToUpdate.roll;
-      if (targetClassId) {
-        const exists = await Student.exists({
-          _id: { $ne: req.params.id },
-          schoolId: req.user.schoolId,
-          classId: targetClassId,
-          roll: targetRoll
-        });
-        if (exists) {
-          return res.status(400).json({ error: 'Roll number already exists for this class' });
-        }
+      const classFilter = targetClassId ? targetClassId : null;
+      const exists = await Student.exists({
+        _id: { $ne: req.params.id },
+        schoolId: req.user.schoolId,
+        classId: classFilter,
+        roll: targetRoll
+      });
+      if (exists) {
+        return respError(res, 'Roll number already exists for this class', 400);
       }
     }
 
@@ -130,13 +131,13 @@ const updateStudent = async (req, res) => {
       payload.parentIds = payload.parentIds ? [payload.parentIds] : [];
     }
     const student = await Student.findOneAndUpdate({ _id: req.params.id, schoolId: req.user.schoolId }, payload, { new: true }).populate('classId');
-    if (!student) return res.status(404).json({ error: 'Student not found' });
-    res.json(student);
+    if (!student) return respError(res, 'Student not found', 404);
+    return respSuccess(res, student);
   } catch (err) {
     if (err && err.code === 11000) {
-      return res.status(400).json({ error: 'Duplicate roll number exists for this class' });
+      return respError(res, 'Duplicate roll number exists for this class', 400);
     }
-    res.status(400).json({ error: err.message });
+    return respError(res, err.message || 'Could not update student', 400);
   }
 };
 
@@ -144,10 +145,10 @@ const updateStudent = async (req, res) => {
 const getStudentById = async (req, res) => {
   try {
     const student = await Student.findOne({ _id: req.params.id, schoolId: req.user.schoolId }).populate('classId');
-    if (!student) return res.status(404).json({ error: 'Student not found' });
-    res.json(student);
+    if (!student) return respError(res, 'Student not found', 404);
+    return respSuccess(res, student);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    return respError(res, err.message || 'Could not fetch student', 400);
   }
 };
 
@@ -155,38 +156,38 @@ const getStudentLedger = async (req, res) => {
   try {
     const studentId = req.params.id;
     const student = await Student.findOne({ _id: studentId, schoolId: req.user.schoolId });
-    if (!student) return res.status(404).json({ error: 'Student not found' });
+    if (!student) return respError(res, 'Student not found', 404);
     const invoices = await Invoice.find({ schoolId: req.user.schoolId, studentId }).sort({ dueDate: -1, createdAt: -1 });
     const payments = await Payment.find({ schoolId: req.user.schoolId, studentId }).sort({ createdAt: -1 });
     const invoiceTotal = invoices.reduce((sum, invoice) => sum + (invoice.amountDue || 0), 0);
     const paymentTotal = payments.reduce((sum, payment) => sum + (payment.amount || 0), 0);
-    res.json({ invoices, payments, invoiceTotal, paymentTotal, balance: invoiceTotal - paymentTotal });
+    return respSuccess(res, { invoices, payments, invoiceTotal, paymentTotal, balance: invoiceTotal - paymentTotal });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return respError(res, err.message || 'Could not fetch ledger', 500);
   }
 };
 
 const uploadStudentPhoto = async (req, res) => {
   try {
     const student = await Student.findOne({ _id: req.params.id, schoolId: req.user.schoolId });
-    if (!student) return res.status(404).json({ error: 'Student not found' });
+    if (!student) return respError(res, 'Student not found', 404);
     const { photoUrl, photoData } = req.body;
     if (photoData) student.photoUrl = photoData;
     else if (photoUrl) student.photoUrl = photoUrl;
     student.updatedAt = Date.now();
     await student.save();
-    res.json(student);
+    return respSuccess(res, student);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    return respError(res, err.message || 'Could not upload photo', 400);
   }
 };
 
 const addStudentAttachment = async (req, res) => {
   try {
     const student = await Student.findOne({ _id: req.params.id, schoolId: req.user.schoolId });
-    if (!student) return res.status(404).json({ error: 'Student not found' });
+    if (!student) return respError(res, 'Student not found', 404);
     const { title, url, data, type, notes } = req.body;
-    if (!title || !(url || data)) return res.status(400).json({ error: 'Attachment title and file/url are required' });
+    if (!title || !(url || data)) return respError(res, 'Attachment title and file/url are required', 400);
     const attachment = {
       title,
       url: url || data,
@@ -198,9 +199,9 @@ const addStudentAttachment = async (req, res) => {
     student.documents.push(attachment);
     student.updatedAt = Date.now();
     await student.save();
-    res.status(201).json(attachment);
+    return respSuccess(res, attachment, 201);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    return respError(res, err.message || 'Could not add attachment', 400);
   }
 };
 
@@ -208,10 +209,10 @@ const promoteStudents = async (req, res) => {
   try {
     const { fromClassId, toClassId, studentIds } = req.body;
     if (!fromClassId || !toClassId) {
-      return res.status(400).json({ error: 'fromClassId and toClassId are required' });
+      return respError(res, 'fromClassId and toClassId are required', 400);
     }
     if (fromClassId === toClassId) {
-      return res.status(400).json({ error: 'Source and target class must be different' });
+      return respError(res, 'Source and target class must be different', 400);
     }
 
     const filter = { schoolId: req.user.schoolId, classId: fromClassId, status: 'Active' };
@@ -220,9 +221,9 @@ const promoteStudents = async (req, res) => {
     }
 
     const result = await Student.updateMany(filter, { classId: toClassId, updatedAt: Date.now() });
-    res.json({ matchedCount: result.matchedCount, modifiedCount: result.modifiedCount });
+    return respSuccess(res, { matchedCount: result.matchedCount, modifiedCount: result.modifiedCount });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return respError(res, err.message || 'Could not promote students', 500);
   }
 };
 
@@ -230,10 +231,10 @@ const promoteStudents = async (req, res) => {
 const deleteStudent = async (req, res) => {
   try {
     const student = await Student.findOneAndDelete({ _id: req.params.id, schoolId: req.user.schoolId });
-    if (!student) return res.status(404).json({ error: 'Student not found' });
-    res.json({ message: 'Student deleted' });
+    if (!student) return respError(res, 'Student not found', 404);
+    return respSuccess(res, { message: 'Student deleted' });
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    return respError(res, err.message || 'Could not delete student', 400);
   }
 };
 

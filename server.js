@@ -39,6 +39,7 @@ require('dotenv').config();
 const connectDB = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
 const { authenticate } = require('./middleware/auth');
+const { roleRouteAccess } = require('./middleware/roleAccess');
 
 const app = express();
 app.set('trust proxy', true);
@@ -71,6 +72,7 @@ app.use('/api/schools', require('./routes/schools'));
 connectDB()
   .then(() => {
     app.use('/api', authenticate);
+    app.use('/api', roleRouteAccess);
     app.use('/api/students', require('./routes/students'));
     app.use('/api/parents', require('./routes/parents'));
     app.use('/api/teachers', require('./routes/teachers'));
@@ -82,6 +84,8 @@ connectDB()
     app.use('/api/tasks', require('./routes/tasks'));
     app.use('/api/questions', require('./routes/question'));
     app.use('/api/grades', require('./routes/grade'));
+    app.use('/api/study-materials', require('./routes/studyMaterials'));
+    app.use('/api/hostel', require('./routes/hostel'));
 
     app.use((req, res) => res.status(404).json({ error: 'Not found' }));
     app.use(errorHandler);

@@ -1,4 +1,5 @@
 const { validationResult } = require('express-validator');
+const { error: respError } = require('../utils/response');
 
 const validate = (rules = []) => {
   const middleware = async (req, res, next) => {
@@ -20,7 +21,8 @@ const validate = (rules = []) => {
 
       const errors = validationResult(req);
       if (errors.isEmpty()) return next();
-      return res.status(400).json({ errors: errors.array() });
+      // Standardize validation response shape using response helper
+      return respError(res, 'Validation failed', 400, errors.array());
     } catch (err) {
       next(err);
     }

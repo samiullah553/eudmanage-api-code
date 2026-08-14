@@ -34,6 +34,8 @@ function normalizeRange(start, end) {
   return Object.keys(range).length ? range : null;
 }
 
+const { error: respError, success: respSuccess } = require('../utils/response');
+
 const getAttendance = async (req, res) => {
   try {
     const { date, classId, studentId, year, startDate, endDate } = req.query;
@@ -57,9 +59,9 @@ const getAttendance = async (req, res) => {
     }
 
     const records = await Attendance.find(q).sort({ date: -1 });
-    res.json(records);
+    return respSuccess(res, records);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return respError(res, err.message || 'Could not fetch attendance', 500);
   }
 };
 
@@ -67,8 +69,9 @@ const getAttendance = async (req, res) => {
 const createAttendance = async (req, res) => {
   try {
     const {date, classId, studentId, status, remarks, reason = 'None'} = req.body;
-    if(!date || !studentId) return res.status(400).json({ error: 'date and studentId required' });
+    if(!date || !studentId) return respError(res, 'date and studentId are required', 400);
     const nd = normalizeDay(date);
+    if (!nd) return respError(res, 'Invalid date format', 400);
     const normalizedStatus = normalizeAttendanceStatus(status);
     // look for existing record for that student & date
     const record = await Attendance.findOne({ schoolId: req.user.schoolId, date: nd, studentId });
@@ -78,14 +81,14 @@ const createAttendance = async (req, res) => {
       record.reason = reason;
       record.updatedAt = new Date();
       await record.save();
-      return res.json(record);
+      return respSuccess(res, record);
     }
 
     const rec = new Attendance({ schoolId: req.user.schoolId, date: nd, classId, studentId, status: normalizedStatus, remarks, reason });
     await rec.save();
-    res.status(201).json(rec);
+    return respSuccess(res, rec, 201);
   } catch(err) {
-    res.status(400).json({error: err.message});
+    return respError(res, err.message || 'Could not create attendance record', 400);
   }
 };
 
@@ -94,9 +97,9 @@ const createAttendance = async (req, res) => {
 const deleteAttendance = async (req, res) => {
   try {
     await Attendance.findOneAndDelete({ _id: req.params.id, schoolId: req.user.schoolId });
-    res.json({message: 'Deleted'});
+    return respSuccess(res, { message: 'Deleted' });
   } catch(err) {
-    res.status(400).json({error: err.message});
+    return respError(res, err.message || 'Could not delete attendance', 400);
   }
 };
 
@@ -104,9 +107,10 @@ const bulkCreateAttendance = async (req, res) => {
   try {
     const { date, classId, absences } = req.body;
     if (!date || !classId || !Array.isArray(absences)) {
-      return res.status(400).json({ error: 'Missing date, classId, or absences array' });
+      return respError(res, 'Missing date, classId, or absences array', 400);
     }
     const nd = normalizeDay(date);
+    if (!nd) return respError(res, 'Invalid date format', 400);
     const results = [];
     for (const absence of absences) {
       const { studentId, status = 'A', reason = 'None', remarks = '' } = absence;
@@ -125,9 +129,9 @@ const bulkCreateAttendance = async (req, res) => {
       results.push(record);
     }
     
-    res.json(results);
+    return respSuccess(res, results);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    return respError(res, err.message || 'Could not save bulk attendance', 400);
   }
 };
 
@@ -135,7 +139,7 @@ const getStudentAttendanceSummary = async (req, res) => {
   try {
     const studentId = req.params.id;
     const { year } = req.query;
-    if (!studentId) return res.status(400).json({ error: 'student id required' });
+    if (!studentId) return respError(res, 'student id required', 400);
     const q = schoolFilter(req, { studentId });
     if(year){
       const y = parseInt(year,10);
@@ -156,9 +160,9 @@ const getStudentAttendanceSummary = async (req, res) => {
 
     const recent = await Attendance.find(q).sort({ date: -1 }).limit(30).select('date status reason remarks -_id');
 
-    res.json({ total, present, absent, late, excused, halfDay, holiday, attendanceRatePercent: rate, recent });
+    return respSuccess(res, { total, present, absent, late, excused, halfDay, holiday, attendanceRatePercent: rate, recent });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return respError(res, err.message || 'Could not fetch attendance summary', 500);
   }
 };
 
@@ -166,7 +170,7 @@ const getStudentAttendanceHistory = async (req, res) => {
   try {
     const studentId = req.params.id;
     const { year, startDate, endDate } = req.query;
-    if (!studentId) return res.status(400).json({ error: 'student id required' });
+    if (!studentId) return respError(res, 'student id required', 400);
     const q = schoolFilter(req, { studentId });
     if (year) {
       const y = parseInt(year, 10);
@@ -180,25 +184,25 @@ const getStudentAttendanceHistory = async (req, res) => {
       if (range) q.date = range;
     }
     const records = await Attendance.find(q).sort({ date: -1 }).select('date status reason remarks classId -_id');
-    res.json(records);
+    return respSuccess(res, records);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return respError(res, err.message || 'Could not fetch attendance history', 500);
   }
 };
 
 const getAttendanceTemplates = async (req, res) => {
   try {
     const templates = await AttendanceTemplate.find({ schoolId: req.user.schoolId }).sort({ createdAt: -1 });
-    res.json(templates);
+    return respSuccess(res, templates);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return respError(res, err.message || 'Could not fetch templates', 500);
   }
 };
 
 const createAttendanceTemplate = async (req, res) => {
   try {
     const { name, classId, entries } = req.body;
-    if (!name || !classId) return res.status(400).json({ error: 'name and classId are required' });
+    if (!name || !classId) return respError(res, 'name and classId are required', 400);
     const validatedEntries = Array.isArray(entries) ? entries.map(entry => ({
       studentId: entry.studentId,
       status: entry.status || 'P',
@@ -207,25 +211,25 @@ const createAttendanceTemplate = async (req, res) => {
     })) : [];
     const template = new AttendanceTemplate({ schoolId: req.user.schoolId, name, classId, entries: validatedEntries });
     await template.save();
-    res.status(201).json(template);
+    return respSuccess(res, template, 201);
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    return respError(res, err.message || 'Could not create template', 400);
   }
 };
 
 const deleteAttendanceTemplate = async (req, res) => {
   try {
     await AttendanceTemplate.findOneAndDelete({ _id: req.params.id, schoolId: req.user.schoolId });
-    res.json({ message: 'Template deleted' });
+    return respSuccess(res, { message: 'Template deleted' });
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    return respError(res, err.message || 'Could not delete template', 400);
   }
 };
 
 const getClassAttendanceReport = async (req, res) => {
   try {
     const { classId, startDate, endDate, year } = req.query;
-    if (!classId) return res.status(400).json({ error: 'classId is required' });
+    if (!classId) return respError(res, 'classId is required', 400);
     const q = schoolFilter(req, { classId });
     if (year) {
       const y = parseInt(year, 10);
@@ -289,9 +293,9 @@ const getClassAttendanceReport = async (req, res) => {
 
     const totalRecords = records.length;
     const attendanceRatePercent = totalRecords > 0 ? Math.round((present / totalRecords) * 10000) / 100 : 0;
-    res.json({ classId, totalRecords, present, absent, late, excused, halfDay, holiday, attendanceRatePercent, studentSummaries, dailyTotals });
+    return respSuccess(res, { classId, totalRecords, present, absent, late, excused, halfDay, holiday, attendanceRatePercent, studentSummaries, dailyTotals });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return respError(res, err.message || 'Could not fetch attendance report', 500);
   }
 };
 

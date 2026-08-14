@@ -14,29 +14,53 @@ const resolveSchool = async ({ schoolId, schoolCode }) => {
   return null;
 };
 
+const normalizeParentRole = (req, res, next) => {
+  if (req.body && typeof req.body.role === 'string') {
+    const role = req.body.role.trim().toLowerCase();
+    if (['father', 'mother', 'guardian'].includes(role)) {
+      req.body.role = 'parent';
+    }
+  }
+  next();
+};
+
+const safeNext = (res, next, err) => {
+  if (typeof next === 'function') {
+    return next(err);
+  }
+  console.error('safeNext fallback:', err);
+  return res.status(500).json({ error: err.message || 'Internal server error' });
+};
+
 const ensureParentProfile = async (user) => {
   if (user.role !== 'parent') return null;
 
-  const existing = await Parent.findOne({ schoolId: user.schoolId, userId: user._id });
-  if (existing) return existing;
+  try {
+    const existing = await Parent.findOne({ schoolId: user.schoolId, userId: user._id });
+    if (existing) return existing;
 
-  const [fname, ...rest] = (user.name || user.email || 'Parent').split(/\s+/);
-  const lname = rest.join(' ') || 'User';
+    const [fname, ...rest] = (user.name || user.email || 'Parent').split(/\s+/);
+    const lname = rest.join(' ') || 'User';
 
-  const parent = new Parent({
-    schoolId: user.schoolId,
-    userId: user._id,
-    fname,
-    lname,
-    email: user.email,
-    status: 'Active'
-  });
+    const parent = new Parent({
+      schoolId: user.schoolId,
+      userId: user._id,
+      fname,
+      lname,
+      email: user.email,
+      status: 'Active'
+    });
 
-  await parent.save();
-  return parent;
+    await parent.save();
+    return parent;
+  } catch (err) {
+    console.error('ensureParentProfile failed:', err && err.message);
+    // Do not block user registration if creating the Parent record fails.
+    return null;
+  }
 };
 
-router.post('/register', validate([
+router.post('/register', normalizeParentRole, validate([
   body('email').isEmail().withMessage('Valid email required'),
   body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
   body('schoolId').optional().isMongoId().withMessage('Invalid schoolId'),
@@ -67,7 +91,7 @@ router.post('/register', validate([
       }
     });
   } catch (err) {
-    next(err);
+    safeNext(res, next, err);
   }
 });
 
@@ -102,7 +126,7 @@ router.post('/login', validate([
       }
     });
   } catch (err) {
-    next(err);
+    safeNext(res, next, err);
   }
 });
 
