@@ -86,6 +86,7 @@ connectDB()
     app.use('/api/grades', require('./routes/grade'));
     app.use('/api/study-materials', require('./routes/studyMaterials'));
     app.use('/api/hostel', require('./routes/hostel'));
+    app.use('/api/quran', require('./routes/quran'));
 
     app.use((req, res) => res.status(404).json({ error: 'Not found' }));
     app.use(errorHandler);
