@@ -68,6 +68,10 @@ app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/schools', require('./routes/schools'));
+// Public Quran listing (no auth required)
+app.use('/api/quran/public', require('./routes/quranPublic'));
+// Public enrollment endpoint for Quran learning (accepts form submissions)
+app.use('/api/enroll', require('./routes/enroll'));
 
 connectDB()
   .then(() => {

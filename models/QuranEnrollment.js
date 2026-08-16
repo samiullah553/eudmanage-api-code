@@ -3,10 +3,12 @@ const mongoose = require('mongoose');
 const QuranEnrollmentSchema = new mongoose.Schema({
   course: { type: mongoose.Schema.Types.ObjectId, ref: 'QuranCourse', required: true },
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  role: { type: String, enum: ['student','parent','auditor'], default: 'student' },
-  status: { type: String, enum: ['active','cancelled','pending'], default: 'active' },
+  role: { type: String, enum: ['student', 'parent', 'auditor'], default: 'student' },
+  status: { type: String, enum: ['active', 'paused', 'completed', 'cancelled', 'pending'], default: 'active' },
   paid: { type: Boolean, default: false },
   paymentInfo: mongoose.Schema.Types.Mixed,
+  progressPercent: { type: Number, default: 0 },
+  completedAt: { type: Date },
   metadata: mongoose.Schema.Types.Mixed
 }, { timestamps: true });
 

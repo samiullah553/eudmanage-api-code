@@ -7,6 +7,7 @@ const userSchema = new mongoose.Schema({
   password: { type: String, required: true, select: false },
   role: { type: String, enum: ['admin', 'teacher', 'student', 'parent'], default: 'student' },
   name: { type: String, trim: true }
+  ,enrolledQuran: { type: Boolean, default: false }
 }, { timestamps: true });
 
 userSchema.index({ email: 1, schoolId: 1 }, { unique: true });

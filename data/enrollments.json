@@ -1,0 +1,32 @@
+[
+  {
+    "id": "1786853221489",
+    "studentName": "sami",
+    "dob": "2026-08-16",
+    "gender": "male",
+    "guardian": "said",
+    "phone": "03038363977",
+    "email": "sami@school.com",
+    "address": "",
+    "prevLevel": "Beginner",
+    "classType": "online",
+    "photo": "uploads\\enrollments\\1786853221476-photo.png",
+    "documents": [],
+    "createdAt": "2026-08-16T04:07:01.489Z"
+  },
+  {
+    "id": "1786859795160",
+    "studentName": "Bilal Ahmad",
+    "dob": "2026-08-16",
+    "gender": "male",
+    "guardian": "khan",
+    "phone": "039493930",
+    "email": "bilal@school.com",
+    "address": "Samar Bagh",
+    "prevLevel": "Can read basic surah",
+    "classType": "one2one",
+    "photo": "uploads\\enrollments\\1786859795149-saethiscope.png",
+    "documents": [],
+    "createdAt": "2026-08-16T05:56:35.160Z"
+  }
+]

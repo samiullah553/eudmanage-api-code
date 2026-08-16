@@ -19,6 +19,10 @@ router.delete('/lessons/:lessonId', ctrl.deleteLesson);
 // Enrollment
 router.post('/courses/:courseId/enroll', ctrl.enrollCourse);
 router.get('/enrollments/my', ctrl.myEnrollments);
+// Admin enrollment requests review
+router.get('/enroll-requests', ctrl.listEnrollmentRequests);
+router.post('/enroll-requests/:id/accept', ctrl.acceptEnrollmentRequest);
+router.post('/enroll-requests/:id/reject', ctrl.rejectEnrollmentRequest);
 
 // Progress
 router.post('/progress', ctrl.postProgress);

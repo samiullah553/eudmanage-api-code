@@ -33,7 +33,13 @@ const ROLE_ROUTE_ACCESS = {
     '/api/students/:id/attendance-summary',
     '/api/students/:id/grades',
     '/api/tasks',
-    '/api/tasks/:id'
+    '/api/tasks/:id',
+    '/api/quran/courses/:courseId',
+    '/api/quran/courses/:courseId/lessons',
+    '/api/quran/lessons/:lessonId',
+    '/api/quran/courses/:courseId/enroll',
+    '/api/quran/enrollments/my',
+    '/api/quran/progress'
   ]
 };
 

@@ -1,8 +1,10 @@
 const mongoose = require('mongoose');
 
 const TranscriptSchema = new mongoose.Schema({
-  ayaIndex: { type: String },
-  text: { type: String }
+  start: { type: Number },
+  end: { type: Number },
+  text: { type: String },
+  ayaIndex: { type: String }
 }, { _id: false });
 
 const TimestampSchema = new mongoose.Schema({
@@ -20,9 +22,12 @@ const ResourceSchema = new mongoose.Schema({
 const QuranLessonSchema = new mongoose.Schema({
   course: { type: mongoose.Schema.Types.ObjectId, ref: 'QuranCourse', required: true },
   title: { type: String, required: true },
+  description: { type: String },
   order: { type: Number, default: 0 },
   duration: { type: Number, default: 0 },
   audioUrl: { type: String },
+  videoUrl: { type: String },
+  isPreview: { type: Boolean, default: false },
   transcript: [TranscriptSchema],
   translations: [{ lang: String, text: String }],
   timestamps: [TimestampSchema],
